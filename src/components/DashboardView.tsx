@@ -1,15 +1,17 @@
-import React, { useState } from "react";
+import React from "react";
+import type { QuizQuestion, StudyNotes } from "../types";
 
 interface DashboardViewProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   displayedSubjects: string[];
   cards: any[];
+  quizQuestions: QuizQuestion[];
+  studyNotes?: StudyNotes[]; // 📝 Added to prevent visibility drops for Notes-only categories
   subjectImages: Record<string, string>;
   onSelectSubject: (subject: string) => void;
   currentTab: "explore" | "my-decks";
   setCurrentTab: (tab: "explore" | "my-decks") => void;
-  onPublishDeckGroup?: (subject: string, theme: string) => void; // Callback to publish from dashboard if wanted
 }
 
 const CARD_THEMES = [
@@ -50,19 +52,20 @@ export default function DashboardView({
   setSearchQuery,
   displayedSubjects,
   cards,
+  quizQuestions,
+  studyNotes = [], // Fallback default array
   subjectImages,
   onSelectSubject,
   currentTab,
   setCurrentTab,
-  onPublishDeckGroup,
 }: DashboardViewProps) {
   return (
-    <div className="w-full block animate-[fadeIn_0.2s_case-out]">
+    <div className="w-full block animate-[fadeIn_0.2s_ease-out]">
       <h1 className="text-center font-bold mb-4 text-[#36343D] text-2xl md:text-3xl lg:text-4xl">
         {currentTab === "explore" ? "Explore Subjects" : "My Private Drafts"}
       </h1>
 
-      {/* MODERN UPGRADED TAB NAVIGATION LAYOUT */}
+      {/* Tab switcher */}
       <div className="flex bg-[#36343D]/5 p-1 rounded-2xl w-full max-w-[400px] mx-auto mb-8 border border-[#36343D]/5 backdrop-blur-sm">
         <button
           type="button"
@@ -84,11 +87,11 @@ export default function DashboardView({
               : "text-[#36343D]/60 hover:text-[#36343D]"
           }`}
         >
-          🔒 My Decks
+          🔒 Personal
         </button>
       </div>
 
-      {/* SEARCH ENGINE BAR BOX */}
+      {/* Search */}
       <div className="w-full bg-[#93ABD8]/25 border border-[#36343D]/10 p-5 rounded-2xl mb-8">
         <div className="flex flex-col gap-2">
           <label
@@ -121,63 +124,77 @@ export default function DashboardView({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
           {displayedSubjects.map((subject, index) => {
-            const theme = CARD_THEMES[index % CARD_THEMES.length];
+            const cardTheme = CARD_THEMES[index % CARD_THEMES.length];
 
-            // Filters cards cleanly by visibility scope
-            const matchingCards = cards.filter((c) => {
-              if (currentTab === "explore") {
-                return c.subject === subject && c.isPublic;
-              } else {
-                return c.subject === subject && !c.isPublic;
-              }
-            });
-
-            // Find how many topics (themes) are tucked inside this subject view grouping
-            const uniqueThemes = Array.from(
-              new Set(matchingCards.map((c) => c.theme)),
+            const matchingCards = cards.filter((c) =>
+              currentTab === "explore"
+                ? c.subject === subject && c.isPublic
+                : c.subject === subject && !c.isPublic,
             );
-            const cardCount = matchingCards.length;
+
+            const matchingQuizzes = quizQuestions.filter((q) =>
+              currentTab === "explore"
+                ? q.subject === subject && q.isPublic
+                : q.subject === subject && !q.isPublic,
+            );
+
+            const matchingNotes = studyNotes.filter((n) =>
+              currentTab === "explore"
+                ? n.subject === subject && n.isPublic
+                : n.subject === subject && !n.isPublic,
+            );
+
+            // Combines distinct topics safely including manual items
+            const uniqueTopics = Array.from(
+              new Set([
+                ...matchingCards.map((c) => c.theme),
+                ...matchingQuizzes.map((q) => q.theme),
+                ...matchingNotes.map((n) => n.theme),
+              ]),
+            );
+
             const bgImage = subjectImages[subject] || subjectImages.Default;
 
-            if (cardCount === 0) return null; // Hide categories that contain zero cards for the active view
+            if (uniqueTopics.length === 0) return null;
 
             return (
               <div
                 key={subject}
-                className={`flex flex-col ${theme.bg} border border-black/5 rounded-2xl overflow-hidden cursor-pointer shadow-md transition-all duration-200 hover:-translate-y-1 hover:shadow-xl group`}
+                className={`flex flex-col ${cardTheme.bg} border border-black/5 rounded-2xl overflow-hidden cursor-pointer shadow-md transition-all duration-200 hover:-translate-y-1 hover:shadow-xl group`}
                 onClick={() => onSelectSubject(subject)}
               >
                 <div
                   className="w-full h-40 bg-contain bg-center shrink-0 bg-no-repeat mt-4 transition-transform duration-300 group-hover:scale-105"
                   style={{ backgroundImage: `url(${bgImage})` }}
                 />
-
                 <div className="p-5 flex flex-col flex-grow justify-between gap-4">
                   <div>
                     <h3
-                      className={`m-0 text-xl font-bold tracking-wide ${theme.title}`}
+                      className={`m-0 text-xl font-bold tracking-wide ${cardTheme.title}`}
                     >
                       {subject.toUpperCase()}
                     </h3>
                     <div
-                      className={`mt-2 flex flex-col gap-0.5 ${theme.count}`}
+                      className={`mt-2 flex flex-col gap-0.5 ${cardTheme.count}`}
                     >
                       <p className="m-0 text-xs font-semibold">
-                        {uniqueThemes.length} topic decks
+                        {uniqueTopics.length} topic
+                        {uniqueTopics.length !== 1 ? "s" : ""}
+                        {matchingQuizzes.length > 0 && (
+                          <span className="ml-1 opacity-70">· 🧠 quiz</span>
+                        )}
+                        {matchingNotes.length > 0 && (
+                          <span className="ml-1 opacity-70">· 📝 notes</span>
+                        )}
                       </p>
                     </div>
                   </div>
-
-                  <div className="flex flex-col gap-2 w-full">
-                    <button
-                      type="button"
-                      className={`w-full border-none py-2.5 rounded-xl font-bold transition-colors duration-200 shrink-0 cursor-pointer ${theme.button}`}
-                    >
-                      {currentTab === "explore"
-                        ? "Study Deck →"
-                        : "Review Drafts 🛠️"}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className={`w-full border-none py-2.5 rounded-xl font-bold transition-colors duration-200 shrink-0 cursor-pointer ${cardTheme.button}`}
+                  >
+                    {currentTab === "explore" ? "Study Deck →" : "Review →"}
+                  </button>
                 </div>
               </div>
             );

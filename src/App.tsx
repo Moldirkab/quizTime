@@ -3,7 +3,7 @@ import Navbar from "./components/Navbar";
 import DashboardView from "./components/DashboardView";
 import TopicsListView from "./components/TopicsListView";
 import StudySessionView from "./components/StudySessionView";
-import { QuizSessionView } from "./components/QuizSessionView";
+import QuizSessionView from "./components/QuizSessionView";
 import AuthView from "./components/AuthView";
 import CreateDeckView from "./components/CreateDeckView";
 import ProgressView from "./components/ProgressView";
@@ -25,10 +25,15 @@ const subjectImages: Record<string, string> = {
 export default function App() {
   const { user: clerkUser, isSignedIn } = useUser();
   const progress = useProgressData(clerkUser?.id ?? null);
-  const nav = useFlashcardNavigation(INITIAL_DEFAULT_CARDS, {
-    recordCardStudied: progress.recordCardStudied,
-    recordTopicCompleted: progress.recordTopicCompleted,
-  });
+
+  const nav = useFlashcardNavigation(
+    INITIAL_DEFAULT_CARDS,
+    {
+      recordCardStudied: progress.recordCardStudied,
+      recordTopicCompleted: progress.recordTopicCompleted,
+    },
+    clerkUser?.id ?? null,
+  );
 
   const displayUser = clerkUser?.firstName || clerkUser?.username || "Learner";
 
@@ -61,11 +66,62 @@ export default function App() {
     );
   };
 
-  const handleQuizFinish = (results: QuizResult[]) => {
-    // results are shown inside QuizSessionView summary screen
-    // record topic as completed in progress
+  const handleQuizFinish = (_results: QuizResult[]) => {
     if (nav.currentTopic) {
       progress.recordTopicCompleted(nav.currentTopic);
+    }
+  };
+
+  const editModeProps = nav.editTarget
+    ? nav.editTarget.type === "flashcard"
+      ? {
+          type: "flashcard" as const,
+          subject: nav.editTarget.subject,
+          theme: nav.editTarget.theme,
+          existingCards: nav.cards.filter(
+            (c) =>
+              c.subject.toLowerCase() ===
+                nav.editTarget!.subject.toLowerCase() &&
+              c.theme === nav.editTarget!.theme,
+          ),
+        }
+      : nav.editTarget.type === "quiz"
+        ? {
+            type: "quiz" as const,
+            subject: nav.editTarget.subject,
+            theme: nav.editTarget.theme,
+            existingQuestions: nav.quizQuestions.filter(
+              (q) =>
+                q.subject.toLowerCase() ===
+                  nav.editTarget!.subject.toLowerCase() &&
+                q.theme === nav.editTarget!.theme,
+            ),
+          }
+        : {
+            type: "notes" as const,
+            subject: nav.editTarget.subject,
+            theme: nav.editTarget.theme,
+            existingContent:
+              nav.studyNotes.find(
+                (n) =>
+                  n.subject.toLowerCase() ===
+                    nav.editTarget!.subject.toLowerCase() &&
+                  n.theme === nav.editTarget!.theme,
+              )?.content || "",
+          }
+    : undefined;
+
+  const handleTopicSelectionWithNotes = (
+    topic: string,
+    mode: "flashcard" | "quiz" | "notes",
+  ) => {
+    if (mode === "notes") {
+      nav.setCurrentTopic(topic);
+      nav.setQuizMode(false);
+      nav.setNotesMode(true);
+    } else {
+      nav.setNotesMode(false);
+      nav.handleSelectTopic(topic, mode);
     }
   };
 
@@ -75,7 +131,10 @@ export default function App() {
         user={isSignedIn ? displayUser : null}
         isAdmin={false}
         onExploreClick={nav.resetToHome}
-        onCreateClick={() => nav.setCurrentView("create-deck")}
+        onCreateClick={() => {
+          nav.setEditTarget(null);
+          nav.setCurrentView("create-deck");
+        }}
         onLoginClick={() => nav.setCurrentView("auth")}
         onLogoutClick={nav.handleLogout}
         onProgressClick={() => nav.setCurrentView("progress")}
@@ -88,7 +147,10 @@ export default function App() {
         ) : nav.currentView === "create-deck" ? (
           renderProtectedView(
             <CreateDeckView
-              onCancel={() => nav.setCurrentView("dashboard")}
+              onCancel={() => {
+                nav.setEditTarget(null);
+                nav.setCurrentView("dashboard");
+              }}
               onPublishDeck={(newCards) => {
                 const cardsWithIds = newCards.map((card, index) => ({
                   ...card,
@@ -96,6 +158,72 @@ export default function App() {
                 }));
                 nav.setCards((prev) => [...prev, ...cardsWithIds]);
                 nav.setDashboardTab("my-decks");
+                nav.setCurrentView("dashboard");
+              }}
+              onPublishQuiz={(newQuestions) => {
+                nav.handleAddQuizQuestions(newQuestions);
+                nav.setDashboardTab("my-decks");
+                nav.setCurrentView("dashboard");
+              }}
+              onPublishNotes={(newNotes) => {
+                nav.handleAddStudyNotes({
+                  ...newNotes,
+                  ownerId: clerkUser?.id ?? null,
+                  ownerName: displayUser,
+                });
+                nav.setDashboardTab("my-decks");
+                nav.setCurrentView("dashboard");
+              }}
+              editMode={editModeProps}
+              onUpdateDeck={(
+                oldSubject,
+                oldTheme,
+                newSubject,
+                newTheme,
+                slots,
+              ) => {
+                nav.handleUpdateFlashcardTopic(
+                  oldSubject,
+                  oldTheme,
+                  newSubject,
+                  newTheme,
+                  slots,
+                );
+                nav.setEditTarget(null);
+                nav.setCurrentView("dashboard");
+              }}
+              onUpdateQuiz={(
+                oldSubject,
+                oldTheme,
+                newSubject,
+                newTheme,
+                questions,
+              ) => {
+                nav.handleUpdateQuizTopic(
+                  oldSubject,
+                  oldTheme,
+                  newSubject,
+                  newTheme,
+                  questions,
+                );
+                nav.setEditTarget(null);
+                nav.setCurrentView("dashboard");
+              }}
+              onUpdateNotes={(
+                oldSubject,
+                oldTheme,
+                newSubject,
+                newTheme,
+                content,
+              ) => {
+                nav.handleUpdateNotesTopic(
+                  oldSubject,
+                  oldTheme,
+                  newSubject,
+                  newTheme,
+                  content,
+                );
+                nav.setEditTarget(null);
                 nav.setCurrentView("dashboard");
               }}
             />,
@@ -122,6 +250,8 @@ export default function App() {
                 setSearchQuery={nav.setSearchQuery}
                 displayedSubjects={nav.displayedSubjects}
                 cards={nav.cards}
+                quizQuestions={nav.quizQuestions}
+                studyNotes={nav.studyNotes}
                 subjectImages={subjectImages}
                 onSelectSubject={(sub) => nav.setCurrentSubject(sub)}
                 currentTab={nav.dashboardTab}
@@ -144,14 +274,14 @@ export default function App() {
                         Deploy Decks Electronically
                       </h4>
                       <p className="m-0 text-xs font-medium text-[#36343D]/70">
-                        Publishing makes these card groups public to everyone on
-                        the Explore tab.
+                        Publishing makes these card groups, summaries, and
+                        quizzes public to everyone on the Explore tab.
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {nav.availableTopics.map((topicName) => (
                         <button
-                          key={topicName}
+                          key={`deck-${topicName}`}
                           type="button"
                           onClick={() =>
                             nav.handlePublishTopic(
@@ -161,9 +291,59 @@ export default function App() {
                           }
                           className="px-4 py-2 text-xs font-bold rounded-xl border-none bg-[#36343D] text-[#FAF4CD] shadow-sm hover:bg-[#F3619C] hover:text-white transition-all cursor-pointer"
                         >
-                          Publish "{topicName}" 🚀
+                          🃏 Publish "{topicName}" 🚀
                         </button>
                       ))}
+                      {nav.availableQuizTopics
+                        .filter((topicName) =>
+                          nav.quizQuestions.some(
+                            (q) =>
+                              q.subject.toLowerCase() ===
+                                nav.currentSubject?.toLowerCase() &&
+                              q.theme === topicName &&
+                              !q.isPublic,
+                          ),
+                        )
+                        .map((topicName) => (
+                          <button
+                            key={`quiz-${topicName}`}
+                            type="button"
+                            onClick={() =>
+                              nav.handlePublishQuizTopic(
+                                nav.currentSubject!,
+                                topicName,
+                              )
+                            }
+                            className="px-4 py-2 text-xs font-bold rounded-xl border-none bg-[#F3619C] text-[#EDE986] shadow-sm hover:bg-[#B494F8] hover:text-[#DBFA40] transition-all cursor-pointer"
+                          >
+                            🧠 Publish Quiz "{topicName}" 🚀
+                          </button>
+                        ))}
+                      {nav.availableNotesTopics
+                        .filter((topicName) =>
+                          nav.studyNotes.some(
+                            (n) =>
+                              n.subject.toLowerCase() ===
+                                nav.currentSubject?.toLowerCase() &&
+                              n.theme === topicName &&
+                              !n.isPublic,
+                          ),
+                        )
+                        .map((topicName) => (
+                          <button
+                            key={`notes-${topicName}`}
+                            type="button"
+                            onClick={() =>
+                              nav.handlePublishNotesTopic(
+                                nav.currentSubject!,
+                                topicName,
+                              )
+                            }
+                            className="px-4 py-2 text-xs font-bold rounded-xl border-none bg-[#B494F8] text-white shadow-sm hover:bg-[#F3619C] transition-all cursor-pointer"
+                          >
+                            📝 Publish Manual "{topicName}" 🚀
+                          </button>
+                        ))}
                     </div>
                   </div>
                 )}
@@ -171,21 +351,83 @@ export default function App() {
                 <TopicsListView
                   currentSubject={nav.currentSubject}
                   availableTopics={nav.availableTopics}
+                  availableQuizTopics={nav.availableQuizTopics}
+                  availableNotesTopics={nav.availableNotesTopics}
                   cards={nav.cards}
+                  quizQuestions={nav.quizQuestions}
+                  studyNotes={nav.studyNotes}
+                  currentUserId={clerkUser?.id ?? null}
                   onBack={() => nav.setCurrentSubject(null)}
-                  onSelectTopic={nav.handleSelectTopic}
+                  onSelectTopic={handleTopicSelectionWithNotes}
+                  onEditFlashcardTopic={(subject, topic) => {
+                    nav.setEditTarget({
+                      type: "flashcard",
+                      subject,
+                      theme: topic,
+                    });
+                    nav.setCurrentView("create-deck");
+                  }}
+                  onEditQuizTopic={(subject, topic) => {
+                    nav.setEditTarget({ type: "quiz", subject, theme: topic });
+                    nav.setCurrentView("create-deck");
+                  }}
+                  onEditNotesTopic={(subject, topic) => {
+                    nav.setEditTarget({ type: "notes", subject, theme: topic });
+                    nav.setCurrentView("create-deck");
+                  }}
+                  onDeleteFlashcardTopic={nav.handleDeleteFlashcardTopic}
+                  onDeleteQuizTopic={nav.handleDeleteQuizTopic}
+                  onDeleteNotesTopic={nav.handleDeleteNotesTopic}
                 />
               </div>
             )}
 
             {nav.currentSubject !== null &&
               nav.currentTopic !== null &&
-              (nav.quizMode ? (
+              (nav.notesMode ? (
+                <div className="w-full max-w-[700px] mx-auto flex flex-col gap-5 animate-[fadeIn_0.25s_ease-out]">
+                  <div className="flex items-center justify-between border-b border-[#36343D]/10 pb-3">
+                    <button
+                      className="text-sm font-bold bg-transparent text-[#36343D] opacity-70 hover:opacity-100 transition-all border-none cursor-pointer"
+                      onClick={() => {
+                        nav.setNotesMode(false);
+                        nav.setCurrentTopic(null);
+                      }}
+                    >
+                      ← Back to Topics
+                    </button>
+                    <span className="text-sm font-bold text-[#B494F8] bg-[#B494F8]/10 px-3 py-1 rounded-full capitalize">
+                      {nav.currentSubject}
+                    </span>
+                  </div>
+
+                  <div className="mb-2">
+                    <h2 className="text-2xl font-extrabold text-[#36343D] m-0">
+                      {nav.currentTopic} Reference Manual
+                    </h2>
+                    <p className="text-xs font-semibold text-[#36343D]/50 uppercase tracking-wider mt-1">
+                      Review Summaries & Core Definitions
+                    </p>
+                  </div>
+
+                  <div className="bg-white border border-[#36343D]/10 rounded-2xl p-6 shadow-sm min-h-[200px]">
+                    {nav.currentTopicNotes ? (
+                      <div className="prose text-sm font-medium text-[#36343D]/80 leading-relaxed whitespace-pre-wrap">
+                        {nav.currentTopicNotes.content}
+                      </div>
+                    ) : (
+                      <div className="text-sm italic text-gray-400 py-4">
+                        No written summary content found for this topic. Use the
+                        editor to add material!
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : nav.quizMode ? (
                 <QuizSessionView
                   currentSubject={nav.currentSubject}
                   currentTopic={nav.currentTopic}
-                  topicCards={nav.filteredCards}
-                  allSubjectCards={nav.subjectCards}
+                  questions={nav.currentTopicQuizQuestions}
                   onBack={() => nav.setCurrentTopic(null)}
                   onFinish={handleQuizFinish}
                 />

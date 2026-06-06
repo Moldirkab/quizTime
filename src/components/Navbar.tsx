@@ -1,10 +1,11 @@
 import React from "react";
+import { useClerk } from "@clerk/clerk-react";
 
 interface NavbarProps {
   user: string | null;
   isAdmin?: boolean;
   onExploreClick: () => void;
-  onCreateClick: () => void; // ← add this back
+  onCreateClick: () => void;
   onLoginClick: () => void;
   onLogoutClick: () => void;
   onProgressClick: () => void;
@@ -23,6 +24,13 @@ export default function Navbar({
   onProgressClick,
   setCurrentView,
 }: NavbarProps) {
+  const { signOut } = useClerk();
+
+  const handleLogout = async () => {
+    await signOut();
+    onLogoutClick(); // clears local state in the hook
+  };
+
   return (
     <nav className="sticky top-0 z-[100] flex items-center justify-between px-4 sm:px-8 py-3 bg-[#93ABD8] shadow-[0_4px_15px_rgba(147,171,216,0.25)]">
       <div
@@ -46,7 +54,6 @@ export default function Navbar({
           + Create Deck
         </button>
 
-        {/* Progress — only shown when signed in */}
         {user && (
           <button
             className="bg-transparent border-none text-[#FAF4CD] text-sm font-semibold cursor-pointer px-2 sm:px-3 py-1.5 rounded-lg transition-all duration-200 hover:bg-[rgba(250,244,205,0.15)] hover:text-white"
@@ -64,7 +71,7 @@ export default function Navbar({
             </span>
             <button
               className="px-3 sm:px-[18px] py-2 text-[13px] font-bold rounded-xl cursor-pointer transition-all duration-200 bg-[rgba(54,52,61,0.1)] text-[#36343D] border border-[rgba(54,52,61,0.2)] hover:bg-[#F3619C] hover:text-white hover:border-transparent hover:-translate-y-[1px]"
-              onClick={onLogoutClick}
+              onClick={handleLogout}
             >
               Log Out
             </button>

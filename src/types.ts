@@ -7,6 +7,17 @@ export interface Flashcard {
   difficultyStreak?: number;
   isPublic?: boolean;
   ownerId?: string | null;
+  ownerName?: string | null;
+}
+
+export interface StudyNotes {
+  id: number;
+  subject: string;
+  theme: string;
+  content: string;
+  isPublic?: boolean;
+  ownerId?: string | null;
+  ownerName?: string | null;
 }
 
 export interface DailyGoal {
@@ -21,9 +32,31 @@ export interface DailyProgress {
 }
 
 export interface QuizResult {
-  cardId: number;
+  questionIndex: number;
   question: string;
-  correctAnswer: string;
-  selectedAnswer: string;
+  correctAnswers: string[];
+  selectedAnswers: string[];
   isCorrect: boolean;
+}
+
+export interface QuizChoice {
+  text: string;
+  isCorrect: boolean;
+}
+
+export interface QuizQuestion {
+  id: number;
+  question: string;
+  choices: QuizChoice[];
+  subject: string;
+  theme: string;
+  isPublic?: boolean;
+  ownerId?: string | null;
+  ownerName?: string | null;
+}
+
+export interface EditTarget {
+  type: "flashcard" | "quiz" | "notes";
+  subject: string;
+  theme: string;
 }

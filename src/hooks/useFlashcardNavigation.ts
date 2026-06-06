@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import type { Flashcard } from "../types";
+import type { Flashcard, QuizQuestion, StudyNotes, EditTarget } from "../types";
 import type { useProgressData } from "./useProgressData";
 
 type ProgressRecorder = Pick<
@@ -9,11 +9,22 @@ type ProgressRecorder = Pick<
 
 export function useFlashcardNavigation(
   initialCards: Flashcard[],
-  progress?: ProgressRecorder
+  progress?: ProgressRecorder,
+  currentUserId: string | null = null
 ) {
   const [cards, setCards] = useState<Flashcard[]>(() => {
     const saved = localStorage.getItem("quiztime_cards");
     return saved ? JSON.parse(saved) : initialCards;
+  });
+
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>(() => {
+    const saved = localStorage.getItem("quiztime_quiz_questions");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [studyNotes, setStudyNotes] = useState<StudyNotes[]>(() => {
+    const saved = localStorage.getItem("quiztime_study_notes");
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [user, setUser] = useState<string | null>(() =>
@@ -31,13 +42,22 @@ export function useFlashcardNavigation(
   const [sessionCardIds, setSessionCardIds] = useState<number[]>([]);
   const [isSessionFinished, setIsSessionFinished] = useState(false);
   const [dashboardTab, setDashboardTab] = useState<"explore" | "my-decks">("explore");
-
-  // ← NEW
   const [quizMode, setQuizMode] = useState(false);
+  const [notesMode, setNotesMode] = useState(false);
+
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
 
   useEffect(() => {
     localStorage.setItem("quiztime_cards", JSON.stringify(cards));
   }, [cards]);
+
+  useEffect(() => {
+    localStorage.setItem("quiztime_quiz_questions", JSON.stringify(quizQuestions));
+  }, [quizQuestions]);
+
+  useEffect(() => {
+    localStorage.setItem("quiztime_study_notes", JSON.stringify(studyNotes));
+  }, [studyNotes]);
 
   useEffect(() => {
     if (user) localStorage.setItem("quiztime_user", user);
@@ -46,24 +66,67 @@ export function useFlashcardNavigation(
 
   const displayedSubjects = useMemo(() => {
     const builtIn = ["coding", "french", "world history", "physics", "math"];
-    const dynamic = cards.map((c) => c.subject.toLowerCase());
-    const unique = Array.from(new Set([...builtIn, ...dynamic]));
+    
+    const visibleCards = cards.filter(
+      (c) => dashboardTab === "my-decks" ? c.ownerId === currentUserId : (c.isPublic || !c.ownerId)
+    );
+    const visibleQuizzes = quizQuestions.filter(
+      (q) => dashboardTab === "my-decks" ? q.ownerId === currentUserId : q.isPublic
+    );
+    const visibleNotes = studyNotes.filter(
+      (n) => dashboardTab === "my-decks" ? n.ownerId === currentUserId : n.isPublic
+    );
+
+    const fromCards = visibleCards.map((c) => c.subject.toLowerCase());
+    const fromQuizzes = visibleQuizzes.map((q) => q.subject.toLowerCase());
+    const fromNotes = visibleNotes.map((n) => n.subject.toLowerCase());
+    
+    const unique = Array.from(new Set([...builtIn, ...fromCards, ...fromQuizzes, ...fromNotes]));
     return unique.filter((sub) =>
       sub.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [cards, searchQuery]);
+  }, [cards, quizQuestions, studyNotes, searchQuery, dashboardTab, currentUserId]);
 
+  // ✅ Fixed: Case-Insensitive filter for available Flashcard topics
   const availableTopics = useMemo(() => {
     return Array.from(
       new Set(
-        cards.filter((c) => c.subject === currentSubject).map((c) => c.theme)
+        cards
+          .filter((c) => c.subject.toLowerCase() === currentSubject?.toLowerCase())
+          .filter((c) => dashboardTab === "my-decks" ? c.ownerId === currentUserId : (c.isPublic || !c.ownerId))
+          .map((c) => c.theme)
       )
     );
-  }, [cards, currentSubject]);
+  }, [cards, currentSubject, dashboardTab, currentUserId]);
 
+  // ✅ Fixed: Case-Insensitive filter for available Quiz topics
+  const availableQuizTopics = useMemo(() => {
+    return Array.from(
+      new Set(
+        quizQuestions
+          .filter((q) => q.subject.toLowerCase() === currentSubject?.toLowerCase())
+          .filter((q) => dashboardTab === "my-decks" ? q.ownerId === currentUserId : q.isPublic)
+          .map((q) => q.theme)
+      )
+    );
+  }, [quizQuestions, currentSubject, dashboardTab, currentUserId]);
+
+  // ✅ Fixed: Case-Insensitive filter for available Study Notes manuals
+  const availableNotesTopics = useMemo(() => {
+    return Array.from(
+      new Set(
+        studyNotes
+          .filter((n) => n.subject.toLowerCase() === currentSubject?.toLowerCase())
+          .filter((n) => dashboardTab === "my-decks" ? n.ownerId === currentUserId : n.isPublic)
+          .map((n) => n.theme)
+      )
+    );
+  }, [studyNotes, currentSubject, dashboardTab, currentUserId]);
+
+  // ✅ Fixed: Case-Insensitive layout mapping for base card indexing
   const baseTopicCards = useMemo(() => {
     return cards.filter(
-      (card) => card.subject === currentSubject && card.theme === currentTopic
+      (card) => card.subject.toLowerCase() === currentSubject?.toLowerCase() && card.theme === currentTopic
     );
   }, [cards, currentSubject, currentTopic]);
 
@@ -73,22 +136,37 @@ export function useFlashcardNavigation(
       .filter((c): c is Flashcard => !!c);
   }, [sessionCardIds, baseTopicCards]);
 
-  // All cards in current subject (for quiz wrong answer pool)
+  // ✅ Fixed: Case-Insensitive calculation for total subject counts
   const subjectCards = useMemo(() => {
-    return cards.filter((c) => c.subject === currentSubject);
+    return cards.filter((c) => c.subject.toLowerCase() === currentSubject?.toLowerCase());
   }, [cards, currentSubject]);
 
-  // ← UPDATED: now accepts mode
+  // ✅ Fixed: Case-Insensitive filter for running Quiz instances
+  const currentTopicQuizQuestions = useMemo(() => {
+    return quizQuestions.filter(
+      (q) => q.subject.toLowerCase() === currentSubject?.toLowerCase() && q.theme === currentTopic
+    );
+  }, [quizQuestions, currentSubject, currentTopic]);
+
+  // ✅ Fixed: Case-Insensitive lookup for reading target Reference Materials
+  const currentTopicNotes = useMemo(() => {
+    return studyNotes.find(
+      (n) => n.subject.toLowerCase() === currentSubject?.toLowerCase() && n.theme === currentTopic
+    ) || null;
+  }, [studyNotes, currentSubject, currentTopic]);
+
+  // ✅ Fixed: Case-Insensitive parsing during user card session loads
   const handleSelectTopic = useCallback(
-    (topic: string, mode: "flashcard" | "quiz" = "flashcard") => {
+    (topic: string, mode: "flashcard" | "quiz" | "notes" = "flashcard") => {
       setCurrentTopic(topic);
       setCurrentCardIndex(0);
       setIsFlipped(false);
       setIsSessionFinished(false);
       setQuizMode(mode === "quiz");
-
+      setNotesMode(mode === "notes");
+      
       const matchingCards = cards.filter(
-        (card) => card.subject === currentSubject && card.theme === topic
+        (card) => card.subject.toLowerCase() === currentSubject?.toLowerCase() && card.theme === topic
       );
       setSessionCardIds(matchingCards.map((c) => c.id));
     },
@@ -114,7 +192,6 @@ export function useFlashcardNavigation(
   const handleCardEvaluation = useCallback(
     (cardId: number, performance: "hard" | "easy") => {
       progress?.recordCardStudied();
-
       setCards((prevCards) =>
         prevCards.map((card) => {
           if (card.id === cardId) {
@@ -128,7 +205,6 @@ export function useFlashcardNavigation(
           return card;
         })
       );
-
       if (performance === "hard") {
         setSessionCardIds((prevIds) => [...prevIds, cardId]);
         setIsFlipped(false);
@@ -145,10 +221,11 @@ export function useFlashcardNavigation(
     [currentCardIndex, filteredCards.length, progress]
   );
 
+  // ✅ Fixed: Case-Insensitive flag match for clear streaks operations
   const handleResetTopicStreaks = useCallback(() => {
     setCards((prevCards) =>
       prevCards.map((card) => {
-        if (card.subject === currentSubject && card.theme === currentTopic) {
+        if (card.subject.toLowerCase() === currentSubject?.toLowerCase() && card.theme === currentTopic) {
           return { ...card, difficultyStreak: 0 };
         }
         return card;
@@ -157,15 +234,184 @@ export function useFlashcardNavigation(
     if (currentTopic) handleSelectTopic(currentTopic, "flashcard");
   }, [currentSubject, currentTopic, handleSelectTopic]);
 
-  const handlePublishTopic = useCallback(
+  // ✅ Fixed: Structural safety updates on data publishers
+  const handlePublishTopic = useCallback((subject: string, topic: string) => {
+    setCards((prev) =>
+      prev.map((card) =>
+        card.subject.toLowerCase() === subject.toLowerCase() && card.theme === topic
+          ? { ...card, isPublic: true }
+          : card
+      )
+    );
+  }, []);
+
+  const handlePublishQuizTopic = useCallback((subject: string, topic: string) => {
+    setQuizQuestions((prev) =>
+      prev.map((q) =>
+        q.subject.toLowerCase() === subject.toLowerCase() && q.theme === topic
+          ? { ...q, isPublic: true }
+          : q
+      )
+    );
+  }, []);
+
+  const handlePublishNotesTopic = useCallback((subject: string, topic: string) => {
+    setStudyNotes((prev) =>
+      prev.map((n) =>
+        n.subject.toLowerCase() === subject.toLowerCase() && n.theme === topic
+          ? { ...n, isPublic: true }
+          : n
+      )
+    );
+  }, []);
+
+  const handleAddQuizQuestions = useCallback(
+    (newQuestions: Omit<QuizQuestion, "id">[]) => {
+      const withIds = newQuestions.map((q, i) => ({
+        ...q,
+        id: Date.now() + i,
+        isPublic: false,
+      }));
+      setQuizQuestions((prev) => [...prev, ...withIds]);
+    },
+    []
+  );
+
+  const handleAddStudyNotes = useCallback(
+    (newNotes: Omit<StudyNotes, "id">) => {
+      const item: StudyNotes = {
+        ...newNotes,
+        id: Date.now(),
+        isPublic: false,
+      };
+      setStudyNotes((prev) => [...prev, item]);
+    },
+    []
+  );
+
+  const handleDeleteFlashcardTopic = useCallback(
     (subject: string, topic: string) => {
       setCards((prev) =>
-        prev.map((card) =>
-          card.subject === subject && card.theme === topic
-            ? { ...card, isPublic: true }
-            : card
-        )
+        prev.filter((c) => !(c.subject.toLowerCase() === subject.toLowerCase() && c.theme === topic))
       );
+    },
+    []
+  );
+
+  const handleDeleteFlashcard = useCallback((cardId: number) => {
+    setCards((prev) => prev.filter((c) => c.id !== cardId));
+  }, []);
+
+  const handleDeleteQuizTopic = useCallback(
+    (subject: string, topic: string) => {
+      setQuizQuestions((prev) =>
+        prev.filter((q) => !(q.subject.toLowerCase() === subject.toLowerCase() && q.theme === topic))
+      );
+    },
+    []
+  );
+
+  const handleDeleteQuizQuestion = useCallback((questionId: number) => {
+    setQuizQuestions((prev) => prev.filter((q) => q.id !== questionId));
+  }, []);
+
+  const handleDeleteNotesTopic = useCallback(
+    (subject: string, topic: string) => {
+      setStudyNotes((prev) =>
+        prev.filter((n) => !(n.subject.toLowerCase() === subject.toLowerCase() && n.theme === topic))
+      );
+    },
+    []
+  );
+
+  const handleUpdateFlashcardTopic = useCallback(
+    (
+      oldSubject: string,
+      oldTheme: string,
+      newSubject: string,
+      newTheme: string,
+      updatedSlots: { id?: number; question: string; answer: string }[]
+    ) => {
+      setCards((prev) => {
+        const withoutOld = prev.filter(
+          (c) => !(c.subject.toLowerCase() === oldSubject.toLowerCase() && c.theme === oldTheme)
+        );
+        const firstMatch = prev.find(
+          (c) => c.subject.toLowerCase() === oldSubject.toLowerCase() && c.theme === oldTheme
+        );
+        const updated = updatedSlots.map((slot, i) => ({
+          id: slot.id ?? Date.now() + i,
+          question: slot.question,
+          answer: slot.answer,
+          subject: newSubject.toLowerCase().trim(),
+          theme: newTheme.trim(),
+          isPublic: firstMatch?.isPublic ?? false,
+          ownerId: firstMatch?.ownerId ?? null,
+          ownerName: firstMatch?.ownerName ?? null,
+          difficultyStreak: 0,
+        }));
+        return [...withoutOld, ...updated];
+      });
+    },
+    []
+  );
+
+  const handleUpdateQuizTopic = useCallback(
+    (
+      oldSubject: string,
+      oldTheme: string,
+      newSubject: string,
+      newTheme: string,
+      updatedQuestions: Omit<QuizQuestion, "id">[]
+    ) => {
+      setQuizQuestions((prev) => {
+        const firstMatch = prev.find(
+          (q) => q.subject.toLowerCase() === oldSubject.toLowerCase() && q.theme === oldTheme
+        );
+        const withoutOld = prev.filter(
+          (q) => !(q.subject.toLowerCase() === oldSubject.toLowerCase() && q.theme === oldTheme)
+        );
+        const updated = updatedQuestions.map((q, i) => ({
+          ...q,
+          id: Date.now() + i,
+          subject: newSubject.toLowerCase().trim(),
+          theme: newTheme.trim(),
+          isPublic: firstMatch?.isPublic ?? false,
+          ownerId: firstMatch?.ownerId ?? null,
+          ownerName: firstMatch?.ownerName ?? null,
+        }));
+        return [...withoutOld, ...updated];
+      });
+    },
+    []
+  );
+
+  const handleUpdateNotesTopic = useCallback(
+    (
+      oldSubject: string,
+      oldTheme: string,
+      newSubject: string,
+      newTheme: string,
+      newContent: string
+    ) => {
+      setStudyNotes((prev) => {
+        const firstMatch = prev.find(
+          (n) => n.subject.toLowerCase() === oldSubject.toLowerCase() && n.theme === oldTheme
+        );
+        const withoutOld = prev.filter(
+          (n) => !(n.subject.toLowerCase() === oldSubject.toLowerCase() && n.theme === oldTheme)
+        );
+        const updated: StudyNotes = {
+          id: firstMatch?.id ?? Date.now(),
+          content: newContent,
+          subject: newSubject.toLowerCase().trim(),
+          theme: newTheme.trim(),
+          isPublic: firstMatch?.isPublic ?? false,
+          ownerId: firstMatch?.ownerId ?? null,
+          ownerName: firstMatch?.ownerName ?? null,
+        };
+        return [...withoutOld, updated];
+      });
     },
     []
   );
@@ -183,6 +429,8 @@ export function useFlashcardNavigation(
     setSessionCardIds([]);
     setIsSessionFinished(false);
     setQuizMode(false);
+    setNotesMode(false);
+    setEditTarget(null);
   }, []);
 
   const handleLogout = useCallback(() => {
@@ -193,6 +441,22 @@ export function useFlashcardNavigation(
   return {
     cards,
     setCards,
+    quizQuestions,
+    setQuizQuestions,
+    studyNotes,
+    setStudyNotes,
+    handleAddQuizQuestions,
+    handleAddStudyNotes,
+    handleDeleteFlashcardTopic,
+    handleDeleteFlashcard,
+    handleDeleteQuizTopic,
+    handleDeleteQuizQuestion,
+    handleDeleteNotesTopic,
+    handleUpdateFlashcardTopic,
+    handleUpdateQuizTopic,
+    handleUpdateNotesTopic,
+    editTarget,
+    setEditTarget,
     user,
     setUser,
     currentView,
@@ -211,16 +475,24 @@ export function useFlashcardNavigation(
     setDashboardTab,
     displayedSubjects,
     availableTopics,
+    availableQuizTopics,
+    availableNotesTopics,
     filteredCards,
     subjectCards,
+    currentTopicQuizQuestions,
+    currentTopicNotes,
     quizMode,
     setQuizMode,
+    notesMode,
+    setNotesMode,
     handleSelectTopic,
     handleNextCard,
     handlePrevCard,
     handleCardEvaluation,
     handleResetTopicStreaks,
     handlePublishTopic,
+    handlePublishQuizTopic,
+    handlePublishNotesTopic,
     resetToHome,
     handleLogout,
   };

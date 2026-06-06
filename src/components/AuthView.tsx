@@ -3,8 +3,6 @@ import { SignIn, SignUp } from "@clerk/clerk-react";
 
 export default function AuthView() {
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
-
-  // Custom UI variables matching your brand palette
   const clerkAppearance = {
     elements: {
       rootBox: "w-full",
@@ -19,7 +17,7 @@ export default function AuthView() {
         "text-xs font-bold uppercase tracking-wider text-[#36343D]/80 pl-1",
       formButtonPrimary:
         "w-full bg-[#F3619C] text-[#EDE986] font-bold py-3.5 px-6 rounded-xl border-none cursor-pointer transition-all duration-200 shadow-md hover:bg-[#B494F8] hover:text-[#DBFA40] hover:-translate-y-[1px] hover:shadow-[0_8px_20px_rgba(180,148,248,0.35)] active:scale-[0.99]",
-      footer: "hidden", // Completely hide Clerk's default footer to use your custom button toggle below
+      footer: "hidden",
       dividerLine: "bg-[#36343D]/10",
       dividerText:
         "text-[#36343D]/40 font-bold text-xs uppercase tracking-wider",
@@ -30,7 +28,7 @@ export default function AuthView() {
 
   return (
     <div className="fixed inset-0 z-[1000] grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] bg-[#FAF4CD] overflow-y-auto lg:overflow-hidden animate-[fadeIn_0.25s_ease-out]">
-      {/* LEFT DESIGN SIDEBAR */}
+      {/* Left Sidebar Branding */}
       <div className="relative flex items-center justify-center p-8 lg:p-[60px] bg-[#93ABD8] overflow-hidden before:content-[''] before:absolute before:w-[500px] before:h-[500px] before:rounded-full before:bg-[rgba(219,250,64,0.15)] before:-top-[100px] before:-left-[100px] before:blur-[60px]">
         <div className="relative z-10 max-w-[520px] text-center lg:text-left flex flex-col justify-between h-full min-h-[350px] lg:min-h-[450px]">
           <div className="relative flex flex-col justify-center items-center lg:items-start h-full w-full pt-16">
@@ -53,19 +51,10 @@ export default function AuthView() {
         </div>
       </div>
 
-      {/* RIGHT AUTH PANEL INTERFACE */}
+      {/* Right Column Auth Form Context */}
       <div className="flex flex-col items-center justify-center p-6 sm:p-8 lg:p-[60px] bg-[#FAF4CD]">
         <div className="w-full max-w-[420px] flex flex-col gap-6">
-          <div className="text-center lg:text-left mb-2">
-            <h2 className="text-2xl md:text-3xl font-extrabold text-[#36343D] tracking-tight mb-1">
-              {isRegistering ? "Get Started" : "Welcome Back"}
-            </h2>
-            <p className="text-sm text-[#36343D]/70 font-medium">
-              {isRegistering
-                ? "Create an account to save your decks."
-                : "Sign in to access your dashboard."}
-            </p>
-          </div>
+          {/* 💡 Custom redundant header HTML removed from here to prevent repetitions with Clerk internals */}
 
           <div className="w-full flex justify-center context-clerk-container">
             {!isRegistering ? (
@@ -75,7 +64,6 @@ export default function AuthView() {
             )}
           </div>
 
-          {/* UPGRADED TOGGLE FOOTER SECTION */}
           <div className="text-center text-sm font-semibold text-[#36343D]/80 mt-2 bg-white/30 py-3 px-4 rounded-xl border border-[#36343D]/5 backdrop-blur-sm">
             <span>
               {!isRegistering ? "New to quizTime?" : "Already have an account?"}

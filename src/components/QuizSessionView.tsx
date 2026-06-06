@@ -1,11 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
-import type { Flashcard, QuizResult } from "../types";
+import type { QuizQuestion, QuizResult } from "../types";
 
 interface QuizSessionViewProps {
   currentSubject: string;
   currentTopic: string;
-  topicCards: Flashcard[];
-  allSubjectCards: Flashcard[];
+  questions: QuizQuestion[];
   onBack: () => void;
   onFinish: (results: QuizResult[]) => void;
 }
@@ -14,134 +13,85 @@ function shuffle<T>(arr: T[]): T[] {
   return [...arr].sort(() => Math.random() - 0.5);
 }
 
-function getAnswerShape(text: string): string {
-  const clean = text.trim();
-  if (/^\d{4}$/.test(clean)) return "year";
-  if (/^-?\d+(\.\d+)?%?$/.test(clean)) return "numeric";
-  if (/[\=\+\-\*\/]/.test(clean)) return "equation";
-  if (clean.split(/\s+/).length <= 2) return "short-phrase";
-  return "sentence";
-}
-
-function buildChoices(
-  correct: Flashcard,
-  allSubjectCards: Flashcard[],
-  topicCards: Flashcard[],
-): string[] {
-  const targetShape = getAnswerShape(correct.answer);
-
-  const matchingShapePool = allSubjectCards
-    .filter(
-      (c) =>
-        c.id !== correct.id &&
-        c.subject === correct.subject &&
-        getAnswerShape(c.answer) === targetShape,
-    )
-    .map((c) => c.answer);
-
-  const crossTopicPool = allSubjectCards
-    .filter(
-      (c) => c.id !== correct.id && !topicCards.find((t) => t.id === c.id),
-    )
-    .map((c) => c.answer);
-
-  const localDeckPool = topicCards
-    .filter((c) => c.id !== correct.id)
-    .map((c) => c.answer);
-
-  const uniqueWrong = Array.from(
-    new Set([...matchingShapePool, ...crossTopicPool, ...localDeckPool]),
-  );
-
-  const wrong = shuffle(uniqueWrong).slice(0, 3);
-
-  return shuffle([correct.answer, ...wrong]);
-}
-
-// Added explicit typing parameter assignment to resolve compilation dropouts
-export function QuizSessionView({
+export default function QuizSessionView({
   currentSubject,
   currentTopic,
-  topicCards,
-  allSubjectCards,
+  questions,
   onBack,
   onFinish,
 }: QuizSessionViewProps) {
-  const questions = useMemo(() => shuffle(topicCards), [topicCards]);
+  const shuffledQuestions = useMemo(() => shuffle(questions), [questions]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedAnswers, setSelectedAnswers] = useState<string[]>([]);
+  const [isSubmitted, setIsSubmitted] = useState(false);
   const [results, setResults] = useState<QuizResult[]>([]);
   const [isFinished, setIsFinished] = useState(false);
 
-  const activeCard = questions[currentIndex];
+  const activeQuestion = shuffledQuestions[currentIndex];
+  const correctAnswers =
+    activeQuestion?.choices.filter((c) => c.isCorrect).map((c) => c.text) ?? [];
+  const isMultipleCorrect = correctAnswers.length > 1;
 
-  const choices = useMemo(
-    () =>
-      activeCard ? buildChoices(activeCard, allSubjectCards, topicCards) : [],
-    [activeCard, allSubjectCards, topicCards],
+  const shuffledChoices = useMemo(
+    () => (activeQuestion ? shuffle(activeQuestion.choices) : []),
+    [activeQuestion],
   );
 
-  const handleSelect = (choice: string) => {
-    if (selected !== null) return;
-    setSelected(choice);
+  const toggleAnswer = (text: string) => {
+    if (isSubmitted) return;
+    setSelectedAnswers((prev) =>
+      prev.includes(text) ? prev.filter((a) => a !== text) : [...prev, text],
+    );
+  };
 
-    const isCorrect = choice === activeCard.answer;
+  const handleSubmit = () => {
+    if (selectedAnswers.length === 0) return;
+    setIsSubmitted(true);
+
+    const isCorrect =
+      correctAnswers.length === selectedAnswers.length &&
+      correctAnswers.every((a) => selectedAnswers.includes(a));
+
     const result: QuizResult = {
-      cardId: activeCard.id,
-      question: activeCard.question,
-      correctAnswer: activeCard.answer,
-      selectedAnswer: choice,
+      questionIndex: currentIndex,
+      question: activeQuestion.question,
+      correctAnswers,
+      selectedAnswers: [...selectedAnswers],
       isCorrect,
     };
     setResults((prev) => [...prev, result]);
   };
 
   const handleNext = () => {
-    if (currentIndex >= questions.length - 1) {
+    if (currentIndex >= shuffledQuestions.length - 1) {
       setIsFinished(true);
       onFinish([...results]);
     } else {
-      setSelected(null);
+      setSelectedAnswers([]);
+      setIsSubmitted(false);
       setCurrentIndex((prev) => prev + 1);
     }
   };
 
   const handleRestart = () => {
     setCurrentIndex(0);
-    setSelected(null);
+    setSelectedAnswers([]);
+    setIsSubmitted(false);
     setResults([]);
     setIsFinished(false);
   };
 
-  useEffect(() => {
-    if (isFinished || selected !== null) return;
-    const handleKey = (e: KeyboardEvent) => {
-      const map: Record<string, number> = {
-        Digit1: 0,
-        Digit2: 1,
-        Digit3: 2,
-        Digit4: 3,
-      };
-      if (map[e.code] !== undefined && choices[map[e.code]]) {
-        handleSelect(choices[map[e.code]]);
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [choices, selected, isFinished]);
-
+  // ── Summary screen ───────────────────────────────────────────
   if (isFinished) {
     const score = results.filter((r) => r.isCorrect).length;
-    const pct = Math.round((score / questions.length) * 100);
-
+    const pct = Math.round((score / shuffledQuestions.length) * 100);
     const emoji =
       pct === 100 ? "🏆" : pct >= 70 ? "🎉" : pct >= 40 ? "📚" : "💪";
-
     const message =
       pct === 100
-        ? "Perfect score! You nailed it."
+        ? "Perfect score! Flawless."
         : pct >= 70
-          ? "Great job! Almost there."
+          ? "Great job! Almost perfect."
           : pct >= 40
             ? "Good effort — review and retry!"
             : "Keep practicing — you've got this!";
@@ -158,7 +108,7 @@ export function QuizSessionView({
         <div className="bg-[#F3619C] rounded-2xl p-8 text-center shadow-md">
           <div className="text-5xl mb-3">{emoji}</div>
           <h2 className="text-3xl font-extrabold text-[#EDE986] mb-1">
-            {score} / {questions.length}
+            {score} / {shuffledQuestions.length}
           </h2>
           <p className="text-[#FAF4CD]/90 font-medium text-sm mb-1">
             {pct}% correct
@@ -183,13 +133,14 @@ export function QuizSessionView({
           </div>
         </div>
 
+        {/* Per-question breakdown */}
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-bold uppercase tracking-widest text-[#36343D]/60">
             Question Breakdown
           </h3>
           {results.map((r, i) => (
             <div
-              key={r.cardId}
+              key={i}
               className={`rounded-xl p-4 border ${
                 r.isCorrect
                   ? "bg-emerald-50 border-emerald-200"
@@ -204,15 +155,15 @@ export function QuizSessionView({
               </p>
               {r.isCorrect ? (
                 <span className="text-xs font-bold text-emerald-600">
-                  ✓ {r.correctAnswer}
+                  ✓ {r.correctAnswers.join(", ")}
                 </span>
               ) : (
                 <div className="flex flex-col gap-0.5">
                   <span className="text-xs font-bold text-red-500">
-                    ✗ Your answer: {r.selectedAnswer}
+                    ✗ Your answer: {r.selectedAnswers.join(", ")}
                   </span>
                   <span className="text-xs font-bold text-emerald-600">
-                    ✓ Correct: {r.correctAnswer}
+                    ✓ Correct: {r.correctAnswers.join(", ")}
                   </span>
                 </div>
               )}
@@ -223,10 +174,16 @@ export function QuizSessionView({
     );
   }
 
-  const progress = (currentIndex / questions.length) * 100;
+  // ── Active question screen ───────────────────────────────────
+  const progressPct = (currentIndex / shuffledQuestions.length) * 100;
+  const isAnswerCorrect =
+    isSubmitted &&
+    correctAnswers.length === selectedAnswers.length &&
+    correctAnswers.every((a) => selectedAnswers.includes(a));
 
   return (
     <div className="w-full max-w-[650px] mx-auto flex flex-col gap-5 animate-[fadeIn_0.25s_ease-out]">
+      {/* Header */}
       <div className="flex items-center justify-between border-b border-[#36343D]/10 pb-3">
         <button
           className="text-sm font-bold bg-transparent text-[#36343D] opacity-70 hover:opacity-100 transition-all border-none cursor-pointer"
@@ -235,17 +192,19 @@ export function QuizSessionView({
           ← Back to Topics
         </button>
         <span className="text-sm font-bold text-[#F3619C] bg-[#F3619C]/10 px-3 py-1 rounded-full">
-          {currentIndex + 1} / {questions.length}
+          {currentIndex + 1} / {shuffledQuestions.length}
         </span>
       </div>
 
+      {/* Progress bar */}
       <div className="w-full h-2 bg-[#36343D]/10 rounded-full overflow-hidden">
         <div
           className="h-full bg-[#F3619C] rounded-full transition-all duration-500"
-          style={{ width: `${progress}%` }}
+          style={{ width: `${progressPct}%` }}
         />
       </div>
 
+      {/* Topic label */}
       <div>
         <h2 className="text-2xl font-extrabold tracking-tight text-[#36343D] m-0">
           {currentTopic}
@@ -256,92 +215,104 @@ export function QuizSessionView({
         </span>
       </div>
 
-      <div className="w-full bg-[#B494F8] rounded-2xl p-6 shadow-md flex flex-col items-center justify-center min-h-[140px] text-center">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-[#DBFA40]/70 mb-3">
+      {/* Question card */}
+      <div className="w-full bg-[#B494F8] rounded-2xl p-6 shadow-md flex flex-col gap-2 min-h-[120px]">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-[#DBFA40]/70">
           Question
         </span>
         <p className="text-lg md:text-xl font-bold text-[#FAF4CD] leading-relaxed">
-          {activeCard?.question}
+          {activeQuestion?.question}
         </p>
+        {isMultipleCorrect && (
+          <span className="text-xs font-bold text-[#DBFA40]/80 mt-1">
+            ✦ Select all correct answers
+          </span>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {choices.map((choice, i) => {
-          const isSelected = selected === choice;
-          const isCorrect = choice === activeCard?.answer;
-          const revealed = selected !== null;
+      {/* Choices */}
+      <div className="flex flex-col gap-2">
+        {shuffledChoices.map((choice, i) => {
+          const isSelected = selectedAnswers.includes(choice.text);
+          const isCorrectChoice = choice.isCorrect;
 
           let style =
             "bg-white border border-[#36343D]/10 text-[#36343D] hover:border-[#B494F8] hover:bg-[#B494F8]/10";
 
-          if (revealed) {
-            if (isCorrect) {
+          if (isSubmitted) {
+            if (isCorrectChoice) {
               style = "bg-emerald-500 border-emerald-500 text-white";
-            } else if (isSelected && !isCorrect) {
+            } else if (isSelected && !isCorrectChoice) {
               style = "bg-red-500 border-red-500 text-white";
             } else {
               style = "bg-white border border-[#36343D]/10 text-[#36343D]/40";
             }
+          } else if (isSelected) {
+            style = "bg-[#B494F8] border-[#B494F8] text-white";
           }
 
           return (
             <button
-              key={choice}
+              key={choice.text}
               type="button"
-              onClick={() => handleSelect(choice)}
-              disabled={revealed}
-              className={`w-full text-left px-4 py-3.5 rounded-xl font-bold text-sm transition-all duration-200 border cursor-pointer disabled:cursor-default ${style}`}
+              onClick={() => toggleAnswer(choice.text)}
+              disabled={isSubmitted}
+              className={`w-full text-left px-4 py-3.5 rounded-xl font-bold text-sm transition-all duration-200 border cursor-pointer disabled:cursor-default flex items-center gap-3 ${style}`}
             >
-              <span className="opacity-50 mr-2 text-xs">{i + 1}.</span>
-              {choice}
+              <span
+                className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 text-xs transition-all
+                  ${
+                    isSelected && !isSubmitted
+                      ? "bg-white/30 border-white"
+                      : "border-current opacity-40"
+                  }`}
+              >
+                {isSelected ? "✓" : ""}
+              </span>
+              <span>
+                <span className="opacity-40 mr-1 text-xs">
+                  {["A", "B", "C", "D"][i]}.
+                </span>
+                {choice.text}
+              </span>
             </button>
           );
         })}
       </div>
 
-      {selected !== null && (
+      {/* Submit / feedback / next */}
+      {!isSubmitted ? (
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={selectedAnswers.length === 0}
+          className="w-full bg-[#36343D] text-[#FAF4CD] font-bold py-3 rounded-xl border-none cursor-pointer hover:bg-[#F3619C] hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Submit Answer
+        </button>
+      ) : (
         <div className="flex flex-col gap-3 animate-[fadeIn_0.2s_ease-out]">
           <div
             className={`rounded-xl px-4 py-3 text-sm font-bold ${
-              selected === activeCard?.answer
+              isAnswerCorrect
                 ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                 : "bg-red-50 text-red-600 border border-red-200"
             }`}
           >
-            {selected === activeCard?.answer
+            {isAnswerCorrect
               ? "✓ Correct!"
-              : `✗ The correct answer was: ${activeCard?.answer}`}
+              : `✗ Correct answer${correctAnswers.length > 1 ? "s" : ""}: ${correctAnswers.join(", ")}`}
           </div>
-
           <button
             type="button"
             onClick={handleNext}
             className="w-full bg-[#36343D] text-[#FAF4CD] font-bold py-3 rounded-xl border-none cursor-pointer hover:bg-[#F3619C] hover:text-white transition-all"
           >
-            {currentIndex >= questions.length - 1
+            {currentIndex >= shuffledQuestions.length - 1
               ? "See Results →"
               : "Next Question →"}
           </button>
         </div>
-      )}
-
-      {selected === null && (
-        <p className="text-center text-xs text-[#36343D]/40 font-medium">
-          Press{" "}
-          <kbd className="bg-white px-1.5 py-0.5 rounded border border-[#36343D]/10 font-bold">
-            1
-          </kbd>{" "}
-          <kbd className="bg-white px-1.5 py-0.5 rounded border border-[#36343D]/10 font-bold">
-            2
-          </kbd>{" "}
-          <kbd className="bg-white px-1.5 py-0.5 rounded border border-[#36343D]/10 font-bold">
-            3
-          </kbd>{" "}
-          <kbd className="bg-white px-1.5 py-0.5 rounded border border-[#36343D]/10 font-bold">
-            4
-          </kbd>{" "}
-          to select an answer
-        </p>
       )}
     </div>
   );

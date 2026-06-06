@@ -1,13 +1,13 @@
 import { useState } from "react";
 import type { Flashcard } from "../types";
-import { useUser } from "@clerk/clerk-react"; // Imported to capture active session scopes
+import { useUser } from "@clerk/clerk-react"; 
 
 type Props = {
   addCard: (card: Flashcard) => void;
 };
 
 export default function AddFlashcard({ addCard }: Props) {
-  const { user } = useUser(); // Pull user identification strings securely
+  const { user } = useUser();
   const [question, setQuestion] = useState<string>("");
   const [answer, setAnswer] = useState<string>("");
   const [theme, setTheme] = useState<string>("");
@@ -26,15 +26,14 @@ export default function AddFlashcard({ addCard }: Props) {
 
     if (!question.trim() || !answer.trim() || !theme.trim() || !subject) return;
 
-    // Converted to fully type-compliant parameters mapped cleanly to Flashcard interface
     const newCard: Flashcard = {
       id: Date.now(),
       question: question.trim(),
       answer: answer.trim(),
       theme: theme.trim(),
       subject: subject,
-      isPublic: false, // Defaults to private draft status
-      ownerId: user?.id || null, // Sets to creator's Clerk user ID (or null for guests)
+      isPublic: false, 
+      ownerId: user?.id || null, 
     };
 
     addCard(newCard);

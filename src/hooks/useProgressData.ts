@@ -38,13 +38,11 @@ export function useProgressData(userId: string | null) {
     () => loadProgressLog(prefix)
   );
 
-  // ← KEY FIX: when userId loads async, reload everything from the correct key
   useEffect(() => {
     setGoalState(loadGoal(prefix));
     setProgressLog(loadProgressLog(prefix));
   }, [prefix]);
 
-  // Persist progressLog whenever it changes
   useEffect(() => {
     localStorage.setItem(`${prefix}_progressLog`, JSON.stringify(progressLog));
   }, [progressLog, prefix]);
