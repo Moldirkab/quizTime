@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import type { Flashcard, DailyGoal } from "../types";
 
 interface ProgressViewProps {
@@ -32,34 +32,27 @@ export default function ProgressView({
   cards,
   goal,
   setGoal,
-  todayProgress,
   streak,
   last7Days,
   goalCurrent,
   goalPercent,
 }: ProgressViewProps) {
-  // Local scratchpad states for the form selection matrix
   const [goalType, setGoalType] = useState<"cards" | "topics">(goal.type);
   const [goalTarget, setGoalTarget] = useState<number>(goal.target);
 
-  // State tracking for the absolute popup toast visibility
   const [showToast, setShowToast] = useState<boolean>(false);
 
-  // Sync internal configuration forms if backend properties update
   useEffect(() => {
     setGoalType(goal.type);
     setGoalTarget(goal.target);
   }, [goal.type, goal.target]);
 
   const handleSaveGoal = () => {
-    // 1. Send the configuration updates upstream to your custom hook state tracking loop
     setGoal({ type: goalType, target: goalTarget });
 
-    // 2. Trigger our micro-interaction confirmation toast feedback alert notification
     setShowToast(true);
   };
 
-  // Automatically dismiss toast notification banner after explicit timeout duration delay
   useEffect(() => {
     if (!showToast) return;
     const timer = setTimeout(() => setShowToast(false), 2500);
@@ -91,7 +84,6 @@ export default function ProgressView({
         </div>
       )}
 
-      {/* Header */}
       <div>
         <h1 className="text-3xl md:text-4xl font-extrabold text-[#36343D] tracking-tight mb-1">
           Your Progress
@@ -102,7 +94,6 @@ export default function ProgressView({
         </p>
       </div>
 
-      {/* Streak + Goal ring */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         {/* Streak */}
         <div className="bg-[#F3619C] rounded-2xl p-6 flex flex-col justify-between shadow-md min-h-[160px]">
@@ -126,7 +117,6 @@ export default function ProgressView({
           </p>
         </div>
 
-        {/* Goal ring */}
         <div className="bg-[#B494F8] rounded-2xl p-6 flex flex-col justify-between shadow-md min-h-[160px]">
           <span className="text-xs font-bold uppercase tracking-widest text-[#DBFA40]/80">
             Today's Goal
@@ -171,7 +161,6 @@ export default function ProgressView({
         </div>
       </div>
 
-      {/* 7-day calendar */}
       <div className="bg-[#93ABD8] rounded-2xl p-6 shadow-md">
         <h2 className="text-sm font-bold uppercase tracking-widest text-[#FAF4CD]/80 mb-5">
           Last 7 Days
@@ -230,8 +219,6 @@ export default function ProgressView({
           </span>
         </div>
       </div>
-
-      {/* Mastery breakdown */}
       <div className="bg-[#F8EDAD] rounded-2xl p-6 shadow-md">
         <h2 className="text-sm font-bold uppercase tracking-widest text-[#ED7C30] mb-5">
           Cards Mastery — {cards.length} total
@@ -286,13 +273,11 @@ export default function ProgressView({
         </div>
       </div>
 
-      {/* Goal setter */}
       <div className="bg-[#E7BEF8] rounded-2xl p-6 shadow-md">
         <h2 className="text-sm font-bold uppercase tracking-widest text-[#FB4645] mb-5">
           Set Daily Goal
         </h2>
 
-        {/* Type toggle buttons */}
         <div className="flex gap-2 mb-5">
           {(["cards", "topics"] as const).map((t) => (
             <button
@@ -314,7 +299,6 @@ export default function ProgressView({
           ))}
         </div>
 
-        {/* Option metrics parameter inputs array matrix */}
         <div className="flex gap-2 flex-wrap mb-5">
           {(goalType === "cards" ? CARD_OPTIONS : TOPIC_OPTIONS).map((n) => (
             <button
@@ -332,8 +316,6 @@ export default function ProgressView({
             </button>
           ))}
         </div>
-
-        {/* EXPLICIT INTERACTION ACTION DISPATCHER */}
         <button
           type="button"
           onClick={handleSaveGoal}

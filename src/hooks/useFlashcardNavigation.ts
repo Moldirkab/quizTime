@@ -31,20 +31,12 @@ export function useFlashcardNavigation(
     localStorage.getItem("quiztime_user")
   );
 
-  const [currentView, setCurrentView] = useState<
-    "dashboard" | "auth" | "create-deck" | "progress"
-  >("dashboard");
-  const [currentSubject, setCurrentSubject] = useState<string | null>(null);
-  const [currentTopic, setCurrentTopic] = useState<string | null>(null);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sessionCardIds, setSessionCardIds] = useState<number[]>([]);
   const [isSessionFinished, setIsSessionFinished] = useState(false);
   const [dashboardTab, setDashboardTab] = useState<"explore" | "my-decks">("explore");
-  const [quizMode, setQuizMode] = useState(false);
-  const [notesMode, setNotesMode] = useState(false);
-
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
 
   useEffect(() => {
@@ -87,110 +79,27 @@ export function useFlashcardNavigation(
     );
   }, [cards, quizQuestions, studyNotes, searchQuery, dashboardTab, currentUserId]);
 
-  // ✅ Fixed: Case-Insensitive filter for available Flashcard topics
-  const availableTopics = useMemo(() => {
-    return Array.from(
-      new Set(
-        cards
-          .filter((c) => c.subject.toLowerCase() === currentSubject?.toLowerCase())
-          .filter((c) => dashboardTab === "my-decks" ? c.ownerId === currentUserId : (c.isPublic || !c.ownerId))
-          .map((c) => c.theme)
-      )
-    );
-  }, [cards, currentSubject, dashboardTab, currentUserId]);
-
-  // ✅ Fixed: Case-Insensitive filter for available Quiz topics
-  const availableQuizTopics = useMemo(() => {
-    return Array.from(
-      new Set(
-        quizQuestions
-          .filter((q) => q.subject.toLowerCase() === currentSubject?.toLowerCase())
-          .filter((q) => dashboardTab === "my-decks" ? q.ownerId === currentUserId : q.isPublic)
-          .map((q) => q.theme)
-      )
-    );
-  }, [quizQuestions, currentSubject, dashboardTab, currentUserId]);
-
-  // ✅ Fixed: Case-Insensitive filter for available Study Notes manuals
-  const availableNotesTopics = useMemo(() => {
-    return Array.from(
-      new Set(
-        studyNotes
-          .filter((n) => n.subject.toLowerCase() === currentSubject?.toLowerCase())
-          .filter((n) => dashboardTab === "my-decks" ? n.ownerId === currentUserId : n.isPublic)
-          .map((n) => n.theme)
-      )
-    );
-  }, [studyNotes, currentSubject, dashboardTab, currentUserId]);
-
-  // ✅ Fixed: Case-Insensitive layout mapping for base card indexing
-  const baseTopicCards = useMemo(() => {
-    return cards.filter(
-      (card) => card.subject.toLowerCase() === currentSubject?.toLowerCase() && card.theme === currentTopic
-    );
-  }, [cards, currentSubject, currentTopic]);
-
+  // Derived filtered flashcard queue computed on-the-fly dynamically
   const filteredCards = useMemo(() => {
-    return sessionCardIds
-      .map((id) => baseTopicCards.find((c) => c.id === id))
-      .filter((c): c is Flashcard => !!c);
-  }, [sessionCardIds, baseTopicCards]);
+    return cards.filter((card) => sessionCardIds.includes(card.id));
+  }, [cards, sessionCardIds]);
 
-  // ✅ Fixed: Case-Insensitive calculation for total subject counts
-  const subjectCards = useMemo(() => {
-    return cards.filter((c) => c.subject.toLowerCase() === currentSubject?.toLowerCase());
-  }, [cards, currentSubject]);
-
-  // ✅ Fixed: Case-Insensitive filter for running Quiz instances
-  const currentTopicQuizQuestions = useMemo(() => {
-    return quizQuestions.filter(
-      (q) => q.subject.toLowerCase() === currentSubject?.toLowerCase() && q.theme === currentTopic
-    );
-  }, [quizQuestions, currentSubject, currentTopic]);
-
-  // ✅ Fixed: Case-Insensitive lookup for reading target Reference Materials
-  const currentTopicNotes = useMemo(() => {
-    return studyNotes.find(
-      (n) => n.subject.toLowerCase() === currentSubject?.toLowerCase() && n.theme === currentTopic
-    ) || null;
-  }, [studyNotes, currentSubject, currentTopic]);
-
-  // ✅ Fixed: Case-Insensitive parsing during user card session loads
-  const handleSelectTopic = useCallback(
-    (topic: string, mode: "flashcard" | "quiz" | "notes" = "flashcard") => {
-      setCurrentTopic(topic);
+  const handleSelectTopicDirectly = useCallback(
+    (subject: string | undefined, topic: string) => {
       setCurrentCardIndex(0);
       setIsFlipped(false);
       setIsSessionFinished(false);
-      setQuizMode(mode === "quiz");
-      setNotesMode(mode === "notes");
       
       const matchingCards = cards.filter(
-        (card) => card.subject.toLowerCase() === currentSubject?.toLowerCase() && card.theme === topic
+        (card) => card.subject.toLowerCase() === subject?.toLowerCase() && card.theme === topic
       );
       setSessionCardIds(matchingCards.map((c) => c.id));
     },
-    [cards, currentSubject]
+    [cards]
   );
 
-  const handleNextCard = useCallback(() => {
-    setIsFlipped(false);
-    if (currentCardIndex >= filteredCards.length - 1) {
-      setIsSessionFinished(true);
-    } else {
-      setCurrentCardIndex((prev) => prev + 1);
-    }
-  }, [currentCardIndex, filteredCards.length]);
-
-  const handlePrevCard = useCallback(() => {
-    setIsFlipped(false);
-    if (currentCardIndex > 0) {
-      setCurrentCardIndex((prev) => prev - 1);
-    }
-  }, [currentCardIndex]);
-
   const handleCardEvaluation = useCallback(
-    (cardId: number, performance: "hard" | "easy") => {
+    (cardId: number, performance: "hard" | "easy", totalLength: number) => {
       progress?.recordCardStudied();
       setCards((prevCards) =>
         prevCards.map((card) => {
@@ -198,8 +107,7 @@ export function useFlashcardNavigation(
             const currentStreak = card.difficultyStreak ?? 0;
             return {
               ...card,
-              difficultyStreak:
-                performance === "easy" ? currentStreak + 1 : 0,
+              difficultyStreak: performance === "easy" ? currentStreak + 1 : 0,
             };
           }
           return card;
@@ -211,31 +119,31 @@ export function useFlashcardNavigation(
         setCurrentCardIndex((prev) => prev + 1);
       } else {
         setIsFlipped(false);
-        if (currentCardIndex >= filteredCards.length - 1) {
+        if (currentCardIndex >= totalLength - 1) {
           setIsSessionFinished(true);
         } else {
           setCurrentCardIndex((prev) => prev + 1);
         }
       }
     },
-    [currentCardIndex, filteredCards.length, progress]
+    [currentCardIndex, progress]
   );
 
-  // ✅ Fixed: Case-Insensitive flag match for clear streaks operations
-  const handleResetTopicStreaks = useCallback(() => {
+  const handleResetTopicStreaksDirectly = useCallback((subject: string | undefined, topic: string | undefined) => {
+    if (!subject || !topic) return;
     setCards((prevCards) =>
       prevCards.map((card) => {
-        if (card.subject.toLowerCase() === currentSubject?.toLowerCase() && card.theme === currentTopic) {
+        if (card.subject.toLowerCase() === subject.toLowerCase() && card.theme === topic) {
           return { ...card, difficultyStreak: 0 };
         }
         return card;
       })
     );
-    if (currentTopic) handleSelectTopic(currentTopic, "flashcard");
-  }, [currentSubject, currentTopic, handleSelectTopic]);
+    handleSelectTopicDirectly(subject, topic);
+  }, [handleSelectTopicDirectly]);
 
-  // ✅ Fixed: Structural safety updates on data publishers
-  const handlePublishTopic = useCallback((subject: string, topic: string) => {
+  const handlePublishTopic = useCallback((subject: string | undefined, topic: string) => {
+    if (!subject) return;
     setCards((prev) =>
       prev.map((card) =>
         card.subject.toLowerCase() === subject.toLowerCase() && card.theme === topic
@@ -245,7 +153,8 @@ export function useFlashcardNavigation(
     );
   }, []);
 
-  const handlePublishQuizTopic = useCallback((subject: string, topic: string) => {
+  const handlePublishQuizTopic = useCallback((subject: string | undefined, topic: string) => {
+    if (!subject) return;
     setQuizQuestions((prev) =>
       prev.map((q) =>
         q.subject.toLowerCase() === subject.toLowerCase() && q.theme === topic
@@ -255,7 +164,8 @@ export function useFlashcardNavigation(
     );
   }, []);
 
-  const handlePublishNotesTopic = useCallback((subject: string, topic: string) => {
+  const handlePublishNotesTopic = useCallback((subject: string | undefined, topic: string) => {
+    if (!subject) return;
     setStudyNotes((prev) =>
       prev.map((n) =>
         n.subject.toLowerCase() === subject.toLowerCase() && n.theme === topic
@@ -416,27 +326,10 @@ export function useFlashcardNavigation(
     []
   );
 
-  useEffect(() => {
-    if (isSessionFinished && currentTopic) {
-      progress?.recordTopicCompleted(currentTopic);
-    }
-  }, [isSessionFinished, currentTopic, progress]);
-
-  const resetToHome = useCallback(() => {
-    setCurrentView("dashboard");
-    setCurrentSubject(null);
-    setCurrentTopic(null);
-    setSessionCardIds([]);
-    setIsSessionFinished(false);
-    setQuizMode(false);
-    setNotesMode(false);
-    setEditTarget(null);
-  }, []);
-
   const handleLogout = useCallback(() => {
     setUser(null);
-    resetToHome();
-  }, [resetToHome]);
+    localStorage.removeItem("quiztime_user");
+  }, []);
 
   return {
     cards,
@@ -459,41 +352,26 @@ export function useFlashcardNavigation(
     setEditTarget,
     user,
     setUser,
-    currentView,
-    setCurrentView,
-    currentSubject,
-    setCurrentSubject,
-    currentTopic,
-    setCurrentTopic,
     currentCardIndex,
+    setCurrentCardIndex,
     isFlipped,
     setIsFlipped,
     searchQuery,
     setSearchQuery,
     isSessionFinished,
+    setIsSessionFinished,
     dashboardTab,
     setDashboardTab,
     displayedSubjects,
-    availableTopics,
-    availableQuizTopics,
-    availableNotesTopics,
     filteredCards,
-    subjectCards,
-    currentTopicQuizQuestions,
-    currentTopicNotes,
-    quizMode,
-    setQuizMode,
-    notesMode,
-    setNotesMode,
-    handleSelectTopic,
-    handleNextCard,
-    handlePrevCard,
+    sessionCardIds,
+    setSessionCardIds,
+    handleSelectTopicDirectly,
     handleCardEvaluation,
-    handleResetTopicStreaks,
+    handleResetTopicStreaksDirectly,
     handlePublishTopic,
     handlePublishQuizTopic,
     handlePublishNotesTopic,
-    resetToHome,
     handleLogout,
   };
 }

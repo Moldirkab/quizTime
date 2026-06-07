@@ -1,66 +1,57 @@
-import React from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useClerk } from "@clerk/clerk-react";
 
 interface NavbarProps {
   user: string | null;
   isAdmin?: boolean;
-  onExploreClick: () => void;
-  onCreateClick: () => void;
-  onLoginClick: () => void;
   onLogoutClick: () => void;
-  onProgressClick: () => void;
-  setCurrentView: (
-    view: "dashboard" | "auth" | "create-deck" | "progress",
-  ) => void;
 }
 
 export default function Navbar({
   user,
   isAdmin = false,
-  onExploreClick,
-  onCreateClick,
-  onLoginClick,
   onLogoutClick,
-  onProgressClick,
-  setCurrentView,
 }: NavbarProps) {
   const { signOut } = useClerk();
+  const navigate = useNavigate();
 
   const handleLogout = async () => {
     await signOut();
-    onLogoutClick(); // clears local state in the hook
+    onLogoutClick();
+    navigate("/"); // Redirect home after logging out
   };
 
   return (
     <nav className="sticky top-0 z-[100] flex items-center justify-between px-4 sm:px-8 py-3 bg-[#93ABD8] shadow-[0_4px_15px_rgba(147,171,216,0.25)]">
-      <div
-        className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#FAF4CD] cursor-pointer select-none"
-        onClick={onExploreClick}
+      {/* Brand logo linked to dashboard root */}
+      <Link
+        to="/"
+        className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#FAF4CD] cursor-pointer select-none no-underline"
       >
         quizTime<span className="text-[#F3619C]">.</span>
-      </div>
+      </Link>
 
       <div className="flex items-center gap-2 sm:gap-[1.2rem]">
-        <button
-          className="bg-transparent border-none text-[#FAF4CD] text-sm font-semibold cursor-pointer px-2 sm:px-3 py-1.5 rounded-lg transition-all duration-200 hover:bg-[rgba(250,244,205,0.15)] hover:text-white"
-          onClick={onExploreClick}
+        <Link
+          to="/"
+          className="bg-transparent border-none text-[#FAF4CD] text-sm font-semibold cursor-pointer px-2 sm:px-3 py-1.5 rounded-lg transition-all duration-200 hover:bg-[rgba(250,244,205,0.15)] hover:text-white no-underline"
         >
           Explore
-        </button>
-        <button
-          className="bg-transparent border-none text-[#FAF4CD] text-sm font-semibold cursor-pointer px-2 sm:px-3 py-1.5 rounded-lg transition-all duration-200 hover:bg-[rgba(250,244,205,0.15)] hover:text-white"
-          onClick={onCreateClick}
+        </Link>
+        <Link
+          to="/create-deck"
+          className="bg-transparent border-none text-[#FAF4CD] text-sm font-semibold cursor-pointer px-2 sm:px-3 py-1.5 rounded-lg transition-all duration-200 hover:bg-[rgba(250,244,205,0.15)] hover:text-white no-underline"
         >
-          + Create Deck
-        </button>
+          + Create
+        </Link>
 
         {user && (
-          <button
-            className="bg-transparent border-none text-[#FAF4CD] text-sm font-semibold cursor-pointer px-2 sm:px-3 py-1.5 rounded-lg transition-all duration-200 hover:bg-[rgba(250,244,205,0.15)] hover:text-white"
-            onClick={onProgressClick}
+          <Link
+            to="/progress"
+            className="bg-transparent border-none text-[#FAF4CD] text-sm font-semibold cursor-pointer px-2 sm:px-3 py-1.5 rounded-lg transition-all duration-200 hover:bg-[rgba(250,244,205,0.15)] hover:text-white no-underline"
           >
             Progress
-          </button>
+          </Link>
         )}
 
         {user ? (
@@ -77,12 +68,12 @@ export default function Navbar({
             </button>
           </div>
         ) : (
-          <button
-            className="px-4 sm:px-[18px] py-2 text-[13px] font-bold rounded-xl cursor-pointer border-none bg-[#36343D] text-[#FAF4CD] shadow-[0_4px_10px_rgba(54,52,61,0.2)] transition-all duration-200 hover:bg-[#9c75f7] hover:text-white hover:-translate-y-[1px]"
-            onClick={onLoginClick}
+          <Link
+            to="/auth"
+            className="px-4 sm:px-[18px] py-2 text-[13px] font-bold rounded-xl cursor-pointer border-none bg-[#36343D] text-[#FAF4CD] shadow-[0_4px_10px_rgba(54,52,61,0.2)] transition-all duration-200 hover:bg-[#9c75f7] hover:text-white hover:-translate-y-[1px] no-underline"
           >
             Sign In 🔒
-          </button>
+          </Link>
         )}
       </div>
     </nav>

@@ -1,4 +1,4 @@
-import React from "react";
+import { useNavigate } from "react-router-dom";
 import type { QuizQuestion, StudyNotes } from "../types";
 
 interface DashboardViewProps {
@@ -7,9 +7,8 @@ interface DashboardViewProps {
   displayedSubjects: string[];
   cards: any[];
   quizQuestions: QuizQuestion[];
-  studyNotes?: StudyNotes[]; // 📝 Added to prevent visibility drops for Notes-only categories
+  studyNotes?: StudyNotes[];
   subjectImages: Record<string, string>;
-  onSelectSubject: (subject: string) => void;
   currentTab: "explore" | "my-decks";
   setCurrentTab: (tab: "explore" | "my-decks") => void;
 }
@@ -53,12 +52,13 @@ export default function DashboardView({
   displayedSubjects,
   cards,
   quizQuestions,
-  studyNotes = [], // Fallback default array
+  studyNotes = [],
   subjectImages,
-  onSelectSubject,
   currentTab,
   setCurrentTab,
 }: DashboardViewProps) {
+  const navigate = useNavigate();
+
   return (
     <div className="w-full block animate-[fadeIn_0.2s_ease-out]">
       <h1 className="text-center font-bold mb-4 text-[#36343D] text-2xl md:text-3xl lg:text-4xl">
@@ -144,7 +144,6 @@ export default function DashboardView({
                 : n.subject === subject && !n.isPublic,
             );
 
-            // Combines distinct topics safely including manual items
             const uniqueTopics = Array.from(
               new Set([
                 ...matchingCards.map((c) => c.theme),
@@ -161,7 +160,12 @@ export default function DashboardView({
               <div
                 key={subject}
                 className={`flex flex-col ${cardTheme.bg} border border-black/5 rounded-2xl overflow-hidden cursor-pointer shadow-md transition-all duration-200 hover:-translate-y-1 hover:shadow-xl group`}
-                onClick={() => onSelectSubject(subject)}
+                // Direct route dispatching to /subject/:subjectName
+                onClick={() =>
+                  navigate(
+                    `/subject/${encodeURIComponent(subject.toLowerCase())}`,
+                  )
+                }
               >
                 <div
                   className="w-full h-40 bg-contain bg-center shrink-0 bg-no-repeat mt-4 transition-transform duration-300 group-hover:scale-105"
