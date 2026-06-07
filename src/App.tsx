@@ -24,12 +24,12 @@ import { INITIAL_DEFAULT_CARDS } from "./data/cards";
 import type { QuizResult } from "./types";
 
 const subjectImages: Record<string, string> = {
-  coding: "/src/assets/coding.png",
-  french: "/src/assets/french.png",
-  "world history": "/src/assets/world_history.png",
-  physics: "/src/assets/physics.png",
-  math: "/src/assets/math.png",
-  Default: "/src/assets/book.png",
+  coding: "/coding.png",
+  french: "/french.png",
+  "world history": "/world_history.png",
+  physics: "/physics.png",
+  math: "/math.png",
+  Default: "/book.png",
 };
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
