@@ -152,7 +152,9 @@ export default function DashboardView({
               ]),
             );
 
-            const bgImage = subjectImages[subject] || subjectImages.Default;
+            // Fix: Enforce lowercase lookup to line up exactly with your App.tsx keys
+            const bgImage =
+              subjectImages[subject.toLowerCase()] || subjectImages.Default;
 
             if (uniqueTopics.length === 0) return null;
 
@@ -160,7 +162,6 @@ export default function DashboardView({
               <div
                 key={subject}
                 className={`flex flex-col ${cardTheme.bg} border border-black/5 rounded-2xl overflow-hidden cursor-pointer shadow-md transition-all duration-200 hover:-translate-y-1 hover:shadow-xl group`}
-                // Direct route dispatching to /subject/:subjectName
                 onClick={() =>
                   navigate(
                     `/subject/${encodeURIComponent(subject.toLowerCase())}`,
